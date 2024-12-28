@@ -1,40 +1,42 @@
+# Lista głównych programów wykonywalnych
 PROGS = main
 
-OTHERS = 
-
-# path to directory, where script capd-config is located
+# Ścieżki do katalogów
 CAPDBINDIR =~/CAPD/build/bin/
+SRCDIR = src
+INCLUDEDIR = include
+OBJDIR = .obj
 
-# setting compiler and linker flags
-CAPDCXX := $(shell $(CAPDBINDIR)capd-config --variable=capd_cxx)  
+# Pliki źródłowe i nagłówkowe
+SOURCES = $(filter-out $(SRCDIR)/main.cpp, $(wildcard $(SRCDIR)/*.cpp))
+HEADERS = $(wildcard $(INCLUDEDIR)/*.h)
+
+# Pliki obiektowe (bez main.cpp)
+OBJ_FILES = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
+
+# Kompilator i flagi
+CAPDCXX := $(shell $(CAPDBINDIR)capd-config --variable=capd_cxx)
 CAPDFLAGS = `${CAPDBINDIR}capd-config --cflags`
 CAPDLIBS = `${CAPDBINDIR}capd-config --libs`
-CXXFLAGS += ${CAPDFLAGS} 
+CXXFLAGS += $(CAPDFLAGS) -I$(INCLUDEDIR)
 
-# directory where object and dependancy files will be created
-OBJDIR = .obj/
-
-#============ the following should not be changed =========
-
-OTHERS_OBJ = ${OTHERS:%=${OBJDIR}%.o}
-OBJ_FILES = ${OTHERS_OBJ} ${PROGS:%=${OBJDIR}%.o}
-
+# Główna reguła
 .PHONY: all
-all: ${PROGS}
+all: $(PROGS)
 
-# rule to link executables
-${PROGS}: % : ${OBJDIR}%.o ${OTHERS_OBJ}
-		${CAPDCXX} -o $@ $< ${OTHERS_OBJ} ${CAPDLIBS}
+# Linkowanie plików wykonywalnych
+$(PROGS): % : $(OBJDIR)/%.o $(OBJ_FILES)
+	$(CAPDCXX) -o $@ $< $(OBJ_FILES) $(CAPDLIBS)
 
-# include files with dependencies
--include ${OBJ_FILES:%=%.d}
+# Kompilacja plików źródłowych na obiekty
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp $(HEADERS)
+	@mkdir -p $(OBJDIR)
+	$(CAPDCXX) $(CXXFLAGS) -MT $@ -MD -MP -MF $(@:.o=.d) -c -o $@ $<
 
-#rule to compile .cpp files and generate corresponding files with dependencies
-${OBJ_FILES}: ${OBJDIR}%.o : %.cpp
-		@mkdir -p ${OBJDIR}
-		$(CAPDCXX) ${CXXFLAGS} -MT $@ -MD -MP -MF ${@:%=%.d} -c -o $@ $<
+# Włączanie plików zależności
+-include $(OBJ_FILES:.o=.d)
 
-# rule to clean all object files, dependencies and executables
+# Czyszczenie
 .PHONY: clean
 clean:
-		rm -f ${OBJDIR}*.o ${OBJDIR}*.o.d ${PROGS}
+	rm -rf $(OBJDIR) $(PROGS)
